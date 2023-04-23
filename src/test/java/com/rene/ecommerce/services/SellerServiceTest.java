@@ -9,8 +9,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import com.rene.ecommerce.exceptions.ClientOrSellerHasThisSameEntryException;
-import com.rene.ecommerce.exceptions.DuplicateEntryException;
+import com.rene.ecommerce.exceptions.*;
 import com.rene.ecommerce.repositories.ClientRepository;
 import com.rene.ecommerce.repositories.SellerRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -21,9 +20,9 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 
+import com.rene.ecommerce.domain.dto.updated.UpdatedSeller;
+import com.rene.ecommerce.domain.users.Client;
 import com.rene.ecommerce.domain.users.Seller;
-import com.rene.ecommerce.exceptions.AuthorizationException;
-import com.rene.ecommerce.exceptions.ObjectNotFoundException;
 import com.rene.ecommerce.security.SellerSS;
 
 public class SellerServiceTest {
@@ -72,14 +71,30 @@ public class SellerServiceTest {
     }
 
     @Test
-    public void testFindById_AuthorizationException() {
-        // Mock SellerSS to simulate unauthorized seller
+    public void testFindById_AuthorizationExceptionWithoutLogginging() {
+        // Define behavior of mocked methods
+        try (MockedStatic<UserService> userService = mockStatic(UserService.class)) {
+            // Mock SellerSS to simulate without logging in
+            userService.when(UserService::sellerAuthenticated).thenReturn(null);
+            when(sellerRepo.findById(2)).thenReturn(Optional.of(new Seller()));
+
+            // Assert that the AuthorizationException is thrown
+            assertThrows(AuthorizationException.class, () -> {
+                sellerService.findById(2);
+            });
+        }
+    }
+
+    @Test
+    public void testFindById_AuthorizationExceptionQueryingDifferentAccount() {
+        // Mock SellerSS to
         SellerSS sellerSS = new SellerSS();
+        sellerSS.setId(1);
 
         // Define behavior of mocked methods
         try (MockedStatic<UserService> userService = mockStatic(UserService.class)) {
-            userService.when(UserService::sellerAuthenticated).thenReturn(null); // should return null?
-            when(sellerRepo.findById(2)).thenReturn(Optional.of(new Seller()));
+            // simulate logging in account 1 but querying account 2
+            userService.when(UserService::sellerAuthenticated).thenReturn(sellerSS);
 
             // Assert that the AuthorizationException is thrown
             assertThrows(AuthorizationException.class, () -> {
@@ -106,6 +121,8 @@ public class SellerServiceTest {
         }
     }
 
+    // Return seller without parsing the id
+    // api: /seller
     @Test
     public void testReturnClientWithoutParsingTheId_Success() {
         // Create a mock seller
@@ -158,8 +175,11 @@ public class SellerServiceTest {
                 sellerService.returnClientWithoutParsingTheId();
             });
         }
+        // Impossible to reach
     }
 
+    // Return all sellers
+    // api: /sellers
     @Test
     public void testFindAll() {
         // Create mock sellers
@@ -181,6 +201,8 @@ public class SellerServiceTest {
         assertEquals(sellers, foundSellers);
     }
 
+    // Create a seller
+    // api: /create/seller
     @Test
     public void testInsert_Success() {
         // Create a mock seller
@@ -221,6 +243,221 @@ public class SellerServiceTest {
         });
     }
 
+    @Test
+    public void testInsert_ClientOrSellerHasThisSameEntryException() {
+        // Create a mock seller
+        Seller seller = new Seller();
+        seller.setEmail("test@example.com");
+        seller.setPassword("password");
+        // Create a mock client that has already exists
+        Client client = new Client();
+
+        // Define behavior of mocked methods
+        when(clientRepo.findByEmail(seller.getEmail())).thenReturn(client);
+        when(passwordEncoder.encode(seller.getPassword())).thenReturn("encoded_password");
+
+        // Assert that the ClientOrSellerHasThisSameEntryException is thrown
+        assertThrows(ClientOrSellerHasThisSameEntryException.class, () -> {
+            sellerService.insert(seller);
+        });
+    }
+
+    // Update a seller
+    // api: /update/seller
+    @Test
+    public void testUpdate_ClientOrSellerHasThisSameEntryException() {
+        // Create a mock updated seller
+        UpdatedSeller updatedSeller = new UpdatedSeller();
+        updatedSeller.setEmail("updated@example.com");
+        updatedSeller.setName("Updated Seller");
+        updatedSeller.setPassword("updated_password");
+
+        // Create a mock seller SS
+        SellerSS sellerSS = new SellerSS();
+        sellerSS.setId(1);
+
+        // Create a mock seller
+        Seller seller = new Seller();
+        seller.setEmail("test@example.com");
+        seller.setPassword("password");
+        seller.setId(1);
+
+        // Define behavior of mocked methods
+        //Test the situation that an email already exists when updating this email to a seller
+        try (MockedStatic<UserService> userService = mockStatic(UserService.class)) {
+            userService.when(UserService::sellerAuthenticated).thenReturn(sellerSS);
+            when(sellerRepo.findById(sellerSS.getId())).thenReturn(Optional.of(seller));
+            when(passwordEncoder.encode(updatedSeller.getPassword())).thenReturn("encoded_updated_password");
+            when(clientRepo.findByEmail(updatedSeller.getEmail())).thenReturn(new Client());
+            when(sellerRepo.save(seller)).thenReturn(seller);
+
+            // Assert that the ClientOrSellerHasThisSameEntryException is thrown
+            assertThrows(ClientOrSellerHasThisSameEntryException.class, () -> {
+                sellerService.update(updatedSeller);
+            });
+        }
+    }
+
+    @Test
+    public void testUpdate_DuplicateEntryException() {
+        // Create a mock updated seller
+        UpdatedSeller updatedSeller = new UpdatedSeller();
+        updatedSeller.setEmail("updated@example.com");
+        updatedSeller.setName("Updated Seller");
+        updatedSeller.setPassword("updated_password");
+
+        // Create a mock seller SS
+        SellerSS sellerSS = new SellerSS();
+        sellerSS.setId(1);
+
+        // Create a mock seller
+        Seller seller = new Seller();
+        seller.setEmail("test@example.com");
+        seller.setPassword("password");
+        seller.setId(1);
+
+        // Test any other situations at the database side that causes a duplicate entry exception
+        try (MockedStatic<UserService> userService = mockStatic(UserService.class)) {
+            userService.when(UserService::sellerAuthenticated).thenReturn(sellerSS);
+            when(sellerRepo.findById(sellerSS.getId())).thenReturn(Optional.of(seller));
+            when(clientRepo.findByEmail(updatedSeller.getEmail())).thenReturn(null);
+            when(passwordEncoder.encode(updatedSeller.getPassword())).thenReturn("encoded_updated_password");
+            when(sellerRepo.save(seller)).thenThrow(RuntimeException.class);
+
+            // Assert that the DuplicateEntryException is thrown
+            assertThrows(DuplicateEntryException.class, () -> {
+                sellerService.update(updatedSeller);
+            });
+        }
+    }
+
+    @Test
+    public void testUpdate_AuthorizationException_RequestUpdatingDifferentSellerProfile() {
+        // Create a mock seller contains updated information
+        UpdatedSeller updatedSeller = new UpdatedSeller();
+        updatedSeller.setEmail("updated@example.com");
+        updatedSeller.setPassword("updated_password");
+
+        // Create a mock seller SS
+        SellerSS sellerSS = new SellerSS();
+        sellerSS.setId(1);
+
+        // Create a mock seller
+        Seller seller = new Seller();
+        seller.setEmail("test@example.com");
+        seller.setPassword("password");
+        seller.setId(2);
 
 
+        try (MockedStatic<UserService> userService = mockStatic(UserService.class)) {
+            userService.when(UserService::sellerAuthenticated).thenReturn(sellerSS);
+            when(sellerRepo.findById(sellerSS.getId())).thenReturn(Optional.of(seller));
+
+            // Assert that the AuthorizationException is thrown
+            assertThrows(AuthorizationException.class, () -> {
+                sellerService.update(updatedSeller);
+            });
+        }
+    }
+
+    // Failed test case
+    @Test
+    public void testUpdate_AuthorizationException_RequestUpdatingWithoutLoggingIn() {
+        // Create a mock seller contains updated information
+        UpdatedSeller updatedSeller = new UpdatedSeller();
+        updatedSeller.setEmail("updated@example.com");
+        updatedSeller.setPassword("updated_password");
+
+        // Create a mock seller that need to be modified
+        int sellerId = 2;
+        Seller seller = new Seller();
+        seller.setEmail("test@example.com");
+        seller.setPassword("password");
+        seller.setId(sellerId);
+
+
+        try (MockedStatic<UserService> userService = mockStatic(UserService.class)) {
+            // without logging in
+            userService.when(UserService::sellerAuthenticated).thenReturn(null);
+            when(sellerRepo.findById(sellerId)).thenReturn(Optional.of(seller));
+
+            // Assert that the AuthorizationException is thrown
+            assertThrows(AuthorizationException.class, () -> {
+                sellerService.update(updatedSeller);
+            });
+        }
+    }
+
+    @Test
+    public void testDelete_Success() {
+        // Create a mock seller SS
+        int sellerId = 2;
+        SellerSS sellerSS = new SellerSS();
+        sellerSS.setId(sellerId);
+
+        // Create a mock seller with zero number of sells
+        Seller seller = new Seller();
+        seller.setNumberOfSells(0);
+
+        // Define behavior of mocked methods
+        try (MockedStatic<UserService> userService = mockStatic(UserService.class)) {
+            userService.when(UserService::sellerAuthenticated).thenReturn(sellerSS);
+            when(sellerRepo.findById(sellerSS.getId())).thenReturn(java.util.Optional.of(seller));
+
+            // Call the method under test
+            sellerService.delete();
+
+            // No exception should be thrown
+        }
+    }
+
+    @Test
+    public void testDelete_UserHasProductsRelationshipsException() {
+        // Create a mock seller SS
+        SellerSS sellerSS = new SellerSS();
+        sellerSS.setId(2);
+
+        // Create a mock seller with non-zero number of sells
+        Seller seller = new Seller();
+        seller.setNumberOfSells(5);
+
+        // Define behavior of mocked methods
+        try (MockedStatic<UserService> userService = mockStatic(UserService.class)) {
+            userService.when(UserService::sellerAuthenticated).thenReturn(sellerSS);
+            when(sellerRepo.findById(sellerSS.getId())).thenReturn(java.util.Optional.of(seller));
+
+            // Assert that the UserHasProductsRelationshipsException is thrown
+            assertThrows(UserHasProductsRelationshipsException.class, () -> {
+                sellerService.delete();
+            });
+        }
+    }
+
+
+    // Failed test case
+    // Should throw AuthorizationException, but throw nullpointexception instead
+    @Test
+    public void testDeleteWithoutLoggingin() {
+        // Create a mock seller that need to be modified
+        int sellerId = 1;
+        Seller seller = new Seller();
+        seller.setEmail("test@example.com");
+        seller.setPassword("password");
+        seller.setId(sellerId);
+
+        // Create a mock seller SS
+        SellerSS sellerSS = new SellerSS();
+        sellerSS.setId(sellerId);
+
+        // Test trying to delete a seller without logging in
+        try (MockedStatic<UserService> userService = mockStatic(UserService.class)) {
+            userService.when(UserService::sellerAuthenticated).thenReturn(null);
+            when(sellerRepo.findById(sellerSS.getId())).thenReturn(Optional.of(seller));
+
+            // Assert that the DuplicateEntryException is thrown
+            assertThrows(DuplicateEntryException.class, () -> {
+                sellerService.delete();
+            });
+        }
+    }
 }

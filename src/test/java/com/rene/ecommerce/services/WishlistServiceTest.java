@@ -11,12 +11,10 @@ import com.rene.ecommerce.security.ClientSS;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.boot.test.context.SpringBootTest;
+
 
 import java.util.HashSet;
 import java.util.Set;
@@ -25,8 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.MockitoAnnotations.openMocks;
 
-@SpringBootTest
-@ExtendWith(MockitoExtension.class)
+
 class WishlistServiceTest {
 
     @InjectMocks
