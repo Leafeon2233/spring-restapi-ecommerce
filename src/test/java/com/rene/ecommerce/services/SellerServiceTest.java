@@ -13,6 +13,7 @@ import com.rene.ecommerce.exceptions.ClientOrSellerHasThisSameEntryException;
 import com.rene.ecommerce.exceptions.DuplicateEntryException;
 import com.rene.ecommerce.repositories.ClientRepository;
 import com.rene.ecommerce.repositories.SellerRepository;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -38,6 +39,9 @@ public class SellerServiceTest {
 
     @Mock
     private UserService userService;
+
+    @Mock
+    private BCryptPasswordEncoder passwordEncoder;
 
     @BeforeEach
     public void setUp() {
@@ -147,7 +151,7 @@ public class SellerServiceTest {
         // Define behavior of mocked methods
         try (MockedStatic<UserService> userService = mockStatic(UserService.class)) {
             userService.when(UserService::sellerAuthenticated).thenReturn(sellerSS);
-            when(sellerRepo.findById(sellerSS.getId())).thenReturn(Optional.empty());
+            when(sellerRepo.findById(1)).thenReturn(Optional.empty());
 
             // Assert that the ObjectNotFoundException is thrown
             assertThrows(ObjectNotFoundException.class, () -> {
@@ -176,5 +180,47 @@ public class SellerServiceTest {
         // Assert that the correct list of sellers is returned
         assertEquals(sellers, foundSellers);
     }
+
+    @Test
+    public void testInsert_Success() {
+        // Create a mock seller
+        Seller seller = new Seller();
+        seller.setId(null);
+        seller.setEmail("test@example.com");
+        String rawPassword = "password";
+        seller.setPassword(rawPassword);
+
+        // Define behavior of mocked methods
+        when(clientRepo.findByEmail(seller.getEmail())).thenReturn(null);
+        when(passwordEncoder.encode(rawPassword)).thenReturn("encoded_password"); // Define behavior of the encode method
+        when(sellerRepo.save(seller)).thenReturn(seller);
+
+        // Call the method under test
+        Seller savedSeller = sellerService.insert(seller);
+
+        // Assert that the correct seller is saved
+        assertEquals(seller, savedSeller);
+        assertEquals("encoded_password", savedSeller.getPassword()); // Verify that the password is encoded
+    }
+
+    @Test
+    public void testInsert_DuplicateEntryException() {
+        // Create a mock seller
+        Seller seller = new Seller();
+        seller.setEmail("test@example.com");
+        seller.setPassword("password");
+
+        // Define behavior of mocked methods
+        when(clientRepo.findByEmail(seller.getEmail())).thenReturn(null);
+        when(passwordEncoder.encode(seller.getPassword())).thenReturn("encoded_password");
+        when(sellerRepo.save(seller)).thenThrow(RuntimeException.class);
+
+        // Assert that the DuplicateEntryException is thrown
+        assertThrows(DuplicateEntryException.class, () -> {
+            sellerService.insert(seller);
+        });
+    }
+
+
 
 }
