@@ -20,6 +20,9 @@ public class ClientResourceTest {
     private static String clientEmail = "client1@gmail.com";
     private static String clientPasswd = "client1";
     private static String clientToken = "";
+    private static String sellerEmail = "seller1@gmail.com";
+    private static String sellerPasswd = "seller1";
+    private static String sellerToken = "";
 
     @BeforeAll
     // login and get token
@@ -29,6 +32,10 @@ public class ClientResourceTest {
         assertTrue(response.length() > 7);
         clientToken = response;
 
+        response = Utils.login(sellerEmail, sellerPasswd);
+        assertTrue(response.startsWith("Bearer "));
+        assertTrue(response.length() > 7);
+        sellerToken = response;
     }
 
     // 2. test ClientResource
@@ -46,6 +53,19 @@ public class ClientResourceTest {
                 extract().response();
         assertEquals(response.jsonPath().getString("email"), clientEmail);
         assertEquals(response.jsonPath().getString("type"), "Client");
+    }
+
+    // 2.1.1 GET /client: return client profile with seller token
+    @Test
+    public void testClientWithSellerToken() {
+        String url = baseUrl + "client";
+        Response response = given().
+                header("Authorization", sellerToken).
+                when().
+                get(url).
+                then().
+                statusCode(403).
+                extract().response();
     }
 
     // 2.2 GET /clients: return all clients
