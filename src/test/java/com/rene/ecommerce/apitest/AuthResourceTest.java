@@ -34,15 +34,7 @@ public class AuthResourceTest {
     }
 
     // 1. test AuthResource
-    // 1.1 POST /forgot : send new password to email
-    @Test
-    public void testForgot() {
-        String url = baseUrl + "forgot";
-        String body = "{}";
-
-    }
-
-    // 1.2 GET /user : return if the user is a client or a seller
+    // 1.1 GET /user : return if the user is a client or a seller
     @Test
     public void testUserClient() {
         String url = baseUrl + "user";
@@ -69,5 +61,38 @@ public class AuthResourceTest {
                 extract().response();
         String role = response.jsonPath().getString("type");
         assertEquals(role, "Seller");
+    }
+
+    // 1.2 POST /forgot : send new password to email
+    // test with non-existing email
+    @Test
+    public void testForgot() {
+        String url = baseUrl + "forgot";
+        String userEmail = "abc@def.com";
+        String body = "{\"email\":\"" + userEmail + "\"}";
+        Response response = given().
+                contentType("application/json").
+                body(body).
+                when().
+                post(url).
+                then().
+                statusCode(404).
+                extract().response();
+    }
+
+    // test with existing email
+    @Test
+    public void testForgot2() {
+        String url = baseUrl + "forgot";
+        String userEmail = "test1@gmail.com";
+        String body = "{\"email\":\"" + userEmail + "\"}";
+        Response response = given().
+                contentType("application/json").
+                body(body).
+                when().
+                post(url).
+                then().
+                statusCode(200).
+                extract().response();
     }
 }

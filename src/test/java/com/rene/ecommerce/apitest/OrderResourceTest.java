@@ -54,6 +54,7 @@ public class OrderResourceTest {
     }
 
     // 1.1 GET /client/order/:id : return a client order by id with seller token
+    // should return 403 forbidden, but returns 500 server error
     @Test
     public void testGetClientOrderWithSellerToken() {
         String url = baseUrl + "client/order/1";
